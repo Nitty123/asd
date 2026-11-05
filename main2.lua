@@ -1,5 +1,5 @@
--- Ragdoll MMA God Hub v17 [MAX KILLER EDITION]
--- ВСТРОЕННАЯ СИСТЕМА КЛЮЧЕЙ + ГИПЕРЗВУКОВОЙ КИНЕТИЧЕСКИЙ УРОН
+-- Ragdoll MMA God Hub v17 [MAX KILLER EDITION + PUNCH EXPLOIT]
+-- ВСТРОЕННАЯ СИСТЕМА КЛЮЧЕЙ + РЕЖИМ ОТБОЙНОГО МОЛОТКА
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -19,15 +19,14 @@ local DISCORD_LINK = "https://discord.gg"
 -- Функция инициализации основного чита (запускается только после ввода верного ключа)
 local function InitializeMainScript()
     -- НАСТРОЙКИ КЛАВИШ
-    local MAGNET_KEY = Enum.KeyCode.X     
+    local MAGNET_KEY = Enum.KeyCode.Z     
     local MENU_TOGGLE_KEY = Enum.KeyCode.RightShift 
     local UNLOAD_KEY = Enum.KeyCode.K     
 
-    -- НАСТРОЙКИ МОМЕНТАЛЬНОГО КИНЕТИЧЕСКОГО УРОНА
-    local COMBAT_SPEED = 450              -- ЭКСТРЕМАЛЬНО Высокая скорость вибрации для спама хитбоксами
-    local COMBAT_RADIUS = 0.5             -- Минимальный радиус (конечности бьют прямо внутри головы)
-    local FLY_HEIGHT = 25                 -- Снижена высота взлета для экономии времени
-    local ATTACK_DURATION = 4.0           -- Время беспрерывного избиения в секундах
+    -- НАСТРОЙКИ ИЗБИЕНИЯ (ОТБОЙНЫЙ МОЛОТОК)
+    local PUNCH_RADIUS = 2.5              -- Амплитуда удара (на сколько студов конечность пролетает сквозь голову)
+    local FLY_HEIGHT = 12                 -- Снизили высоту, чтобы модель персонажа стояла жестче над целью
+    local ATTACK_DURATION = 4.0           
 
     -- СОСТОЯНИЯ
     local autoAntiFall = true
@@ -38,6 +37,7 @@ local function InitializeMainScript()
     local magnetAttachments = {}
     local targetAttachments = {}
     local alignPositions = {}
+    local punchTick = 0
 
     local combatLimbs = {"LeftHand", "RightHand", "LeftFoot", "RightFoot"}
     local eagleRoutineActive = false
@@ -91,7 +91,7 @@ local function InitializeMainScript()
         return nearest
     end
 
-    -- КИНЕТИЧЕСКИЙ ЗАПУСК МАГНИТА
+    -- ЗАПУСК ХЛЫСТОВОГО МАГНИТА
     local function startFullMagnet()
         local character = LocalPlayer.Character
         local targetRoot = getNearestTarget()
@@ -104,6 +104,9 @@ local function InitializeMainScript()
         for _, limbName in ipairs(combatLimbs) do
             local limbPart = character:FindFirstChild(limbName)
             if limbPart and limbPart:IsA("BasePart") then
+                -- Отключаем коллизию с собственным телом, чтобы удары не блокировались
+                limbPart.CanCollide = false
+                
                 local mAtt = Instance.new("Attachment")
                 mAtt.Name = "MagnetAtt_" .. limbName
                 mAtt.Parent = limbPart
@@ -119,8 +122,7 @@ local function InitializeMainScript()
                 alignPos.Mode = Enum.PositionAlignmentMode.TwoAttachment
                 alignPos.Attachment0 = mAtt
                 alignPos.Attachment1 = tAtt
-                -- МАКСИМАЛЬНАЯ МОЩНОСТЬ: Мгновенное стягивание со всей дури
-                alignPos.MaxForce = 999999 
+                alignPos.MaxForce = 999999 -- Сила оригинальная
                 alignPos.Responsiveness = 200
                 alignPos.Parent = limbPart
                 alignPositions[limbName] = alignPos
@@ -130,12 +132,20 @@ local function InitializeMainScript()
 
     local function stopFullMagnet()
         isMagnetActive = false
+        local character = LocalPlayer.Character
         for _, alignPos in pairs(alignPositions) do if alignPos then alignPos:Destroy() end end
         for _, mAtt in pairs(magnetAttachments) do if mAtt then mAtt:Destroy() end end
         for _, tAtt in pairs(targetAttachments) do if tAtt then tAtt:Destroy() end end
         alignPositions = {}
         magnetAttachments = {}
         targetAttachments = {}
+        
+        if character then
+            for _, limbName in ipairs(combatLimbs) do
+                local limbPart = character:FindFirstChild(limbName)
+                if limbPart and limbPart:IsA("BasePart") then limbPart.CanCollide = true end
+            end
+        end
     end
 
     -- АВТОМАТИЧЕСКИЙ ЦИКЛ НАЛЁТА (EAGLE ROUTINE)
@@ -156,7 +166,7 @@ local function InitializeMainScript()
                     end
                     
                     character:PivotTo(CFrame.new(targetRoot.Position + Vector3.new(0, FLY_HEIGHT, 0), targetRoot.Position))
-                    task.wait(0.15) -- Уменьшена задержка перед падением
+                    task.wait(0.12)
                     
                     if not eagleRoutineActive then break end
                     
@@ -174,15 +184,16 @@ local function InitializeMainScript()
         stopFullMagnet()
     end
 
-    -- ОСНОВНОЙ ПОТОК ФИЗИКИ И ВИБРАЦИИ
+    -- ОСНОВНОЙ ПОТОК ФИЗИКИ И ЭМУЛЯЦИИ УДАРОВ
     connections.mainLoop = RunService.Heartbeat:Connect(function()
         local character = LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local hrp = character and character:FindFirstChild("HumanoidRootPart")
 
+        -- Полное гашение вращения твоего RootPart, чтобы персонаж не крутился юлой
         if hrp and humanoid then
-            if humanoid:GetState() == Enum.HumanoidStateType.Ragdoll or hrp.RotVelocity.Magnitude > 6 then
-                hrp.RotVelocity = Vector3.zero
+            hrp.RotVelocity = Vector3.zero
+            if humanoid:GetState() == Enum.HumanoidStateType.Ragdoll or hrp.RotVelocity.Magnitude > 3 then
                 for _, limbName in ipairs(combatLimbs) do
                     local limb = character:FindFirstChild(limbName)
                     if limb then limb.Velocity = hrp.Velocity end
@@ -200,7 +211,7 @@ local function InitializeMainScript()
             end
         end
         
-        -- ГИПЕРЗВУКОВАЯ РАЗГРУЗКА УРОНА внутри головы
+        -- ЛОГИКА ХЛЫСТА (ОТБОЙНЫЙ МОЛОТОК)
         if isMagnetActive then
             local targetRoot = getNearestTarget()
             local targetChar = targetRoot and targetRoot.Parent
@@ -212,22 +223,37 @@ local function InitializeMainScript()
                 return
             end
             
-            local timeClock = os.clock() * COMBAT_SPEED
-            local offsetX = math.sin(timeClock) * COMBAT_RADIUS + math.random(-2, 2) / 10
-            local offsetY = math.cos(timeClock) * COMBAT_RADIUS + math.random(-2, 2) / 10
-            local offsetZ = math.sin(timeClock * 1.6) * COMBAT_RADIUS + math.random(-2, 2) / 10
-            
-            for _, tAtt in pairs(targetAttachments) do
-                if tAtt and tAtt.Parent == targetHead then
-                    tAtt.Position = Vector3.new(offsetX, offsetY, offsetZ)
-                elseif tAtt and targetHead then
-                    tAtt.Parent = targetHead
-                end
+            -- Держим жесткую позицию над челом без вращения
+            if hrp and targetRoot then
+                hrp.Velocity = Vector3.zero
+                hrp.CFrame = CFrame.new(targetRoot.Position + Vector3.new(0, FLY_HEIGHT, 0), targetRoot.Position)
             end
-        end
-    end)
-
-    -- Нажатия клавиш
+            
+            punchTick = punchTick + 1
+            
+            -- Каждый второй кадр меняем вектор атаки (вперед/назад сквозь голову)
+local offset
+if punchTick % 2 == 0 then
+-- Кадр удара: конечности резко пробивают голову насквозь по случайной траектории
+offset = Vector3.new(
+math.random(-100, 100) / 100 * PUNCH_RADIUS,
+math.random(-100, 100) / 100 * PUNCH_RADIUS,
+math.random(-100, 100) / 100 * PUNCH_RADIUS
+)
+else
+-- Кадр отката: конечности мгновенно отдергиваются назад на 3 студа вверх, имитируя замах
+offset = Vector3.new(0, PUNCH_RADIUS + 1, 0)
+end
+for _, tAtt in pairs(targetAttachments) do
+if tAtt and tAtt.Parent == targetHead then
+tAtt.Position = offset
+elseif tAtt and targetHead then
+tAtt.Parent = targetHead
+end
+end
+end
+end)
+-- Нажатия клавиш
 connections.inputBegan = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 if gameProcessed then return end
 if input.KeyCode == MAGNET_KEY then
@@ -267,7 +293,7 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12); MainCorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 42); Title.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-Title.Text = "🦅 EAGLE KILLER EDITION v17 🦅"; Title.TextColor3 = Color3.fromRGB(231, 76, 60)
+Title.Text = "🦅 EAGLE STABLE ED. v17 🦅"; Title.TextColor3 = Color3.fromRGB(231, 76, 60)
 Title.Font = Enum.Font.GothamBold; Title.TextSize = 11; Title.Parent = MainFrame
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 12); TitleCorner.Parent = Title
@@ -291,7 +317,7 @@ lbl.Size = UDim2.new(0, 190, 0, 22); lbl.Position = position; lbl.BackgroundColo
 Instance.new("UICorner").Parent = lbl
 end
 createBindLabel("🦅 Зажми X: Режим Аннигиляции врага", UDim2.new(0, 20, 0, 102))
-createBindLabel("⚡ Гиперзвуковой урон и стягивание", UDim2.new(0, 20, 0, 130))
+createBindLabel("⚡ Кинетический Отбойный Молоток", UDim2.new(0, 20, 0, 130))
 local UnloadBtn = Instance.new("TextButton")
 UnloadBtn.Size = UDim2.new(0, 190, 0, 32); UnloadBtn.Position = UDim2.new(0, 20, 0, 162); UnloadBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 UnloadBtn.Text = "🛑 ВЫГРУЗИТЬ ХАБ (K)"; UnloadBtn.TextColor3 = Color3.fromRGB(231, 76, 60); UnloadBtn.Font = Enum.Font.GothamBold; UnloadBtn.TextSize = 10; UnloadBtn.Parent = MainFrame
@@ -307,7 +333,7 @@ end)
 local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 20); Footer.Position = UDim2.new(0, 0, 1, -20); Footer.BackgroundTransparency = 1; Footer.Text = "[Правый Shift] — Скрыть / Открыть меню"
 Footer.TextColor3 = Color3.fromRGB(110, 110, 120); Footer.Font = Enum.Font.Gotham; Footer.TextSize = 9; Footer.Parent = MainFrame
-print("Ragdoll MMA Eagle Hub v17 успешно загружен!")
+print("Ragdoll MMA Eagle Hub v17 успешно загружен с Punch Exploit!")
 end
 -- ============================================================================
 -- СОЗДАНИЕ GUI ДЛЯ ВВОДА КЛЮЧА АВТОРИЗАЦИИ
@@ -377,7 +403,6 @@ StatusLbl.TextColor3 = Color3.fromRGB(140, 140, 150)
 StatusLbl.Font = Enum.Font.Gotham
 StatusLbl.TextSize = 9
 StatusLbl.Parent = KeyFrame
--- ЛОГИКА НАЖАТИЙ НА КНОПКИ В ОКНЕ КЛЮЧА
 GetKeyBtn.MouseButton1Click:Connect(function()
 if setclipboard then
 setclipboard(DISCORD_LINK)
