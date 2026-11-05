@@ -1,20 +1,27 @@
--- Ragdoll MMA God Hub v17 [MAX KILLER EDITION + SMOOTH TIMED LIMBS]
--- ВСТРОЕННАЯ СИСТЕМА КЛЮЧЕЙ + СЕТЕВОЙ ОБХОД ХИТБОКСОВ + ЖЕСТКАЯ СТАБИЛИЗАЦИЯ
+-- Ragdoll MMA God Hub v17 [MAX KILLER EDITION + RESTRICTION BYPASS REJOIN]
+-- ВСТРОЕННАЯ СИСТЕМА КЛЮЧЕЙ + СЕТЕВОЙ ОБХОД ХИТБОКСОВ + ФИКС ОШИБКИ ТЕЛЕПОРТА
+
+-- Ждем полной загрузки игры (критично для папки autoexec)
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
 
 local LocalPlayer = Players.LocalPlayer
 local GUI_NAME = "MMAGodHubV17"
 
 -- ============================================================================
--- НАСТРОЙКА КЛЮЧЕЙ И ССЫЛОК
+-- НАСТРОЙКА КЛЮЧЕЙ, ССЫЛОК И ЦЕЛЕВОГО ПЛЕЙСА
 -- ============================================================================
 local SECRET_KEY = "NittyOnTop"                       
 local DISCORD_LINK = "https://discord.gg"    
+local TARGET_PLACE_ID = 76205942520539 -- ID игры Ragdoll MMA из твоей ссылки
 
 -- Функция инициализации основного чита (запускается только после ввода верного ключа)
 local function InitializeMainScript()
@@ -22,12 +29,13 @@ local function InitializeMainScript()
     local MAGNET_KEY = Enum.KeyCode.X     
     local MENU_TOGGLE_KEY = Enum.KeyCode.RightShift 
     local UNLOAD_KEY = Enum.KeyCode.K     
+    local REJOIN_KEY = Enum.KeyCode.R     
 
-    -- НАСТРОЙКИ ИЗБИЕНИЯ (КОМФОРТНЫЙ ДЛЯ ФИЗИКИ ТЕМП)
-    local PUNCH_RADIUS = 1.4              -- Уменьшен радиус, чтобы конечности не дергали торс
-    local FLY_HEIGHT = 10                 -- Высота зависания над целью
-    local ATTACK_DURATION = 4.0           -- Длительность одной серии атак
-    local INSTANT_KO_VELOCITY = 150       -- Снижен разгон хитбокса, чтобы не взрывать физику тела
+    -- НАСТРОЙКИ ИЗБИЕНИЯ
+    local PUNCH_RADIUS = 1.4              
+    local FLY_HEIGHT = 10                 
+    local ATTACK_DURATION = 4.0           
+    local INSTANT_KO_VELOCITY = 150       
 
     -- СОСТОЯНИЯ
     local autoAntiFall = true
@@ -92,6 +100,14 @@ local function InitializeMainScript()
         return nearest
     end
 
+    -- ОБХОД ОШИБКИ ОГРАНИЧЕНИЯ ПЕРЕЗАХОДА (Безопасный Teleport)
+    local function reconnectToPlace()
+        -- Полностью убран прыжок по JobId, который вызывал ошибку Restricted
+        pcall(function()
+            TeleportService:Teleport(TARGET_PLACE_ID, LocalPlayer)
+        end)
+    end
+
     -- ЗАПУСК МЯСОРУБКИ КОНЕЧНОСТЕЙ
     local function startFullMagnet()
         local character = LocalPlayer.Character
@@ -129,10 +145,8 @@ local function InitializeMainScript()
             end
         end
 
-        -- СТАБИЛИЗИРОВАННЫЙ ЦИКЛ УДАРОВ С УВЕЛИЧЕННЫМИ ЗАДЕРЖКАМИ
         punchThread = task.spawn(function()
             while isMagnetActive and targetHead and targetHead.Parent and targetHead.Parent:FindFirstChildOfClass("Humanoid").Health > 0 do
-                -- ФАЗА 1: Удар внутрь головы (Мягкий разброс, задержка 0.06 сек)
                 local strikeOffset = Vector3.new(
                     math.random(-100, 100) / 100 * PUNCH_RADIUS,
                     math.random(-100, 100) / 100 * PUNCH_RADIUS,
@@ -154,7 +168,6 @@ local function InitializeMainScript()
                 end
                 task.wait(0.06) 
 
-                -- ФАЗА 2: Откат назад (Задержка 0.04 сек)
                 local recoilOffset = Vector3.new(0, PUNCH_RADIUS + 1, 0)
                 for _, tAtt in pairs(targetAttachments) do
                     if tAtt and tAtt.Parent == targetHead then tAtt.Position = recoilOffset end
@@ -202,8 +215,6 @@ local function InitializeMainScript()
                     end
                     
                     character:PivotTo(CFrame.new(targetRoot.Position + Vector3.new(0, FLY_HEIGHT, 0), targetRoot.Position))
-                    
-                    -- Ждем синхронизации сети
                     task.wait(0.2)
                     
                     if not eagleRoutineActive then break end
@@ -226,10 +237,8 @@ local function InitializeMainScript()
     connections.mainLoop = RunService.Heartbeat:Connect(function()
         local character = LocalPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        local hrp = character and character:FindFirstChild("HumanoidRootPart")
-
-        -- Полное обнуление угловой скорости торса
-        if hrp and humanoid then
+local hrp = character and character:FindFirstChild("HumanoidRootPart")
+if hrp and humanoid then
 hrp.RotVelocity = Vector3.zero
 if humanoid:GetState() == Enum.HumanoidStateType.Ragdoll or hrp.RotVelocity.Magnitude > 3 then
 for _, limbName in ipairs(combatLimbs) do
@@ -247,7 +256,6 @@ hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(look.X, 0, look
 humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
 end
 end
--- Мертвая фиксация над целью без покачиваний тела
 if isMagnetActive then
 local targetRoot = getNearestTarget()
 local targetChar = targetRoot and targetRoot.Parent
@@ -258,7 +266,6 @@ return
 end
 if hrp and targetRoot then
 hrp.Velocity = Vector3.zero
--- Никаких стрейфов влево-вправо, строго статичные координаты
 hrp.CFrame = CFrame.new(targetRoot.Position + Vector3.new(0, FLY_HEIGHT, 0), targetRoot.Position)
 end
 end
@@ -272,6 +279,8 @@ elseif input.KeyCode == MENU_TOGGLE_KEY then
 menuVisible = not menuVisible
 local mainFrame = CoreGui:FindFirstChild(GUI_NAME) and CoreGui[GUI_NAME]:FindFirstChild("MainFrame")
 if mainFrame then mainFrame.Visible = menuVisible end
+elseif input.KeyCode == REJOIN_KEY then
+reconnectToPlace()
 elseif input.KeyCode == UNLOAD_KEY then
 stopEagleRoutine()
 autoAntiFall = false
@@ -295,7 +304,7 @@ pcall(function() ScreenGui.Parent = CoreGui end)
 if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 230, 0, 210)
+MainFrame.Size = UDim2.new(0, 230, 0, 235)
 MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
 MainFrame.BorderSizePixel = 0; MainFrame.Active = true; MainFrame.Draggable = true; MainFrame.Parent = ScreenGui
@@ -303,7 +312,7 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 12); MainCorner.Parent = MainFrame
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 42); Title.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
-Title.Text = "🦅 EAGLE SMOOTH v17 🦅"; Title.TextColor3 = Color3.fromRGB(231, 76, 60)
+Title.Text = "🦅 EAGLE FIXED REJOIN v17 🦅"; Title.TextColor3 = Color3.fromRGB(231, 76, 60)
 Title.Font = Enum.Font.GothamBold; Title.TextSize = 11; Title.Parent = MainFrame
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 12); TitleCorner.Parent = Title
@@ -327,9 +336,9 @@ lbl.Size = UDim2.new(0, 190, 0, 22); lbl.Position = position; lbl.BackgroundColo
 Instance.new("UICorner").Parent = lbl
 end
 createBindLabel("🦅 Зажми X: Режим Аннигиляции врага", UDim2.new(0, 20, 0, 102))
-createBindLabel("⚡ Стабилизированные хитбоксы", UDim2.new(0, 20, 0, 130))
+createBindLabel("🔄 Нажми R: Безопасный Реджоин", UDim2.new(0, 20, 0, 130))
 local UnloadBtn = Instance.new("TextButton")
-UnloadBtn.Size = UDim2.new(0, 190, 0, 32); UnloadBtn.Position = UDim2.new(0, 20, 0, 162); UnloadBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+UnloadBtn.Size = UDim2.new(0, 190, 0, 32); UnloadBtn.Position = UDim2.new(0, 20, 0, 158); UnloadBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 UnloadBtn.Text = "🛑 ВЫГРУЗИТЬ ХАБ (K)"; UnloadBtn.TextColor3 = Color3.fromRGB(231, 76, 60); UnloadBtn.Font = Enum.Font.GothamBold; UnloadBtn.TextSize = 10; UnloadBtn.Parent = MainFrame
 Instance.new("UICorner").Parent = UnloadBtn
 UnloadBtn.MouseButton1Click:Connect(function()
@@ -343,7 +352,7 @@ end)
 local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 20); Footer.Position = UDim2.new(0, 0, 1, -20); Footer.BackgroundTransparency = 1; Footer.Text = "[Правый Shift] — Скрыть / Открыть меню"
 Footer.TextColor3 = Color3.fromRGB(110, 110, 120); Footer.Font = Enum.Font.Gotham; Footer.TextSize = 9; Footer.Parent = MainFrame
-print("Ragdoll MMA Eagle Hub v17 успешно загружен с мертвой фиксацией тела!")
+print("Ragdoll MMA Eagle Hub v17 успешно загружен с авто-перезаходом!")
 end
 -- ============================================================================
 -- СОЗДАНИЕ GUI ДЛЯ ВВОДА КЛЮЧА АВТОРИЗАЦИИ
